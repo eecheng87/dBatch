@@ -10,9 +10,19 @@
 //    make OPENSSL=/path/to/your/openssl/installation
 
 #include "mongoose.h"
+#include <pthread.h>
+
+#define n 3
+pthread_t t[n];
+pthread_mutex_t lock;
 
 // The very first web page in history. You can replace it from command line
 static const char *s_url = "http://info.cern.ch";
+
+long get_elapse(struct timespec start, struct timespec end) {
+    return ((long)1.0e+9 * end.tv_sec + end.tv_nsec) -
+           ((long)1.0e+9 * start.tv_sec + start.tv_nsec);
+}
 
 // Print HTTP response and signal that we're done
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -25,7 +35,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       struct mg_tls_opts opts = {.ca = "ca.pem", .srvname = host};
       mg_tls_init(c, &opts);
     }
-
     // Send request
     mg_printf(c,
               "GET %s HTTP/1.0\r\n"
@@ -43,14 +52,30 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   }
 }
 
+void *worker(void *arg) {
+    struct timespec t1, t2;
+    struct mg_mgr mgr;                        // Event manager
+    bool done = false;                        // Event handler flips it to true
+    mg_mgr_init(&mgr);                        // Initialise event manager
+    mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection
+    clock_gettime(CLOCK_REALTIME, &t1);
+    while (!done) mg_mgr_poll(&mgr, 1000);    // Infinite event loop
+    clock_gettime(CLOCK_REALTIME, &t2);
+    pthread_mutex_lock(&lock);
+    printf("\n->> %ld\n", get_elapse(t1, t2));
+    pthread_mutex_unlock(&lock);
+    mg_mgr_free(&mgr);                        // Free resources
+}
+
 int main(int argc, char *argv[]) {
-  struct mg_mgr mgr;                        // Event manager
-  bool done = false;                        // Event handler flips it to true
+  int i;
   if (argc > 1) s_url = argv[1];            // Use URL from command line
-  mg_log_set("3");                          // Set to 0 to disable debug
-  mg_mgr_init(&mgr);                        // Initialise event manager
-  mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection
-  while (!done) mg_mgr_poll(&mgr, 1000);    // Infinite event loop
-  mg_mgr_free(&mgr);                        // Free resources
+  pthread_mutex_init(&lock, NULL);
+  for (i = 0; i < n; i++)
+    pthread_create(&t[i], NULL, worker, NULL);
+  for (i = 0; i < n; i++)
+    pthread_join(t[i], NULL);
+  pthread_mutex_destroy(&lock);
+
   return 0;
 }

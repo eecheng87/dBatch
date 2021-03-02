@@ -16,7 +16,7 @@ long batch_flush() {
     return syscall(__NR_batch_flush);
     /* TODO: cleanup cpybuf list or mem pool */
 }
-
+#if 0
 int open(const char *pathname, int flags, mode_t mode) {
 
     if (!in_segment) {
@@ -108,7 +108,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 
     return 0;
 }
-
+#endif
 
 ssize_t sendto(int sockfd, void *buf, size_t len, unsigned flags,
                struct sockaddr *dest_addr, int addrlen) {
@@ -119,8 +119,8 @@ ssize_t sendto(int sockfd, void *buf, size_t len, unsigned flags,
     }
 
     int off,
-        toff = (((struct pthread_fake *)pthread_self())->tid - main_thread_pid);
-    off = toff << 6; /* 6 = log64 */
+        toff = 0;
+    off = curindex[1] << 6; /* 6 = log64 */
 
     if(pool_offset + (len / POOL_UNIT) >= MAX_POOL_SIZE)
         pool_offset = 0;
@@ -140,7 +140,19 @@ ssize_t sendto(int sockfd, void *buf, size_t len, unsigned flags,
     btable[off + curindex[toff]].pid = main_thread_pid + off;
     curindex[toff] =
         (curindex[toff] == MAX_TABLE_SIZE - 1) ? 1 : curindex[toff] + 1;
-
+    if(curindex[toff] == MAX_TABLE_SIZE - 1){
+        if(curindex[1] == MAX_THREAD_NUM -1){
+            curindex[1] = 1;
+        }else
+        {
+            curindex[1]++;
+        }
+        curindex[toff] = 1;
+    }else
+    {
+        curindex[toff]++;
+    }
+    //printf("%d\n", curindex[toff]);
     /* assume always success */
     return len;
 }

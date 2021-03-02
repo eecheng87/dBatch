@@ -3086,7 +3086,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   now = mg_millis();
   mg_timer_poll(now);
     //printf("In poll\n");
-    batch_start();
+  //batch_start();
   for (c = mgr->conns; c != NULL; c = tmp) {
     tmp = c->next;
     mg_call(c, MG_EV_POLL, &now);
@@ -3113,7 +3113,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     if (c->is_draining && c->send.len == 0) c->is_closing = 1;
     if (c->is_closing) close_conn(c);
   }
-  batch_flush();
+  //batch_flush();
 }
 #endif
 

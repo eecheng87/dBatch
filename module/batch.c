@@ -73,7 +73,7 @@ asmlinkage long sys_register(const struct pt_regs *regs) {
 
     /* initial table status */
     for (j = 0; j < MAX_THREAD_NUM; j++)
-        for (i = 0; i < MAX_ENTRY_NUM; i++)
+        for (i = 0; i < 64; i++)
             batch_table[j][i].rstatus = BENTRY_EMPTY;
 
     for (i = 0; i < MAX_THREAD_NUM; i++)
@@ -87,36 +87,40 @@ asmlinkage long sys_register(const struct pt_regs *regs) {
 /* printk is only for debug usage */
 /* it will lower a lot performance */
 asmlinkage long sys_batch(const struct pt_regs *regs) {
-    int j = current->pid - main_pid;
-    unsigned long i = start_index[j];
+    int j = start_index[1], cnt = 0, k;
+    int i = start_index[0];
 
 #if DEBUG
-    printk(KERN_INFO "Start flushing, called from %d\n", main_pid + j);
+    printk(KERN_INFO "Start flushing, started from index: %d\n", i);
 #endif
     while (batch_table[j][i].rstatus == BENTRY_BUSY) {
 #if DEBUG
-        printk(KERN_INFO "Index %ld do syscall %d\n", i,
-               batch_table[j][i].sysnum);
+        cnt++;
+        printk(KERN_INFO "Index %d do syscall %d (%d %d)\n", i,
+               batch_table[j][i].sysnum, j, i);
 #endif
-        switch (batch_table[j][i].sysnum) {
-        case __NR_write:
-        case __NR_read:
-        case __NR_close: {
-            int fd = batch_table[j][i].args[0];
-            batch_table[j][i].args[0] =
-                fd < 0 ? batch_table[j][-fd].sysret : fd;
-            break;
-        }
-        default:
-            break;
-        }
         batch_table[j][i].sysret =
             indirect_call(scTab[batch_table[j][i].sysnum],
                           batch_table[j][i].nargs, batch_table[j][i].args);
         batch_table[j][i].rstatus = BENTRY_EMPTY;
-        i = (i == 63) ? 1 : i + 1;
+        if(i == MAX_ENTRY_NUM - 1){
+            if(j == MAX_THREAD_NUM -1){
+                j = 1;
+            }else
+            {
+                j++;
+            }
+            i = 1;
+        }else
+        {
+            i++;
+        }
     }
-    start_index[j] = i;
+#if DEBUG
+        printk(KERN_INFO "batch %d syscalls\n", cnt);
+#endif
+    start_index[0] = i;
+    start_index[1] = j;
     return 0;
 }
 

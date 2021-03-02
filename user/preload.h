@@ -2,7 +2,7 @@
 
 #define MAX_TABLE_SIZE 64
 #define MAX_THREAD_NUM 10
-#define MAX_POOL_SIZE 130172
+#define MAX_POOL_SIZE 131072
 #define POOL_UNIT 8
 
 #include <dlfcn.h>
