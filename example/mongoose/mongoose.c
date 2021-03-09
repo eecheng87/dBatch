@@ -3086,7 +3086,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   now = mg_millis();
   mg_timer_poll(now);
     //printf("In poll\n");
-    //batch_start();
+//batch_start();
   for (c = mgr->conns; c != NULL; c = tmp) {
     tmp = c->next;
     mg_call(c, MG_EV_POLL, &now);

@@ -84,6 +84,7 @@ asmlinkage long sys_register(const struct pt_regs *regs) {
     return 0;
 }
 
+#if 0
 /* printk is only for debug usage */
 /* it will lower a lot performance */
 asmlinkage long sys_batch(const struct pt_regs *regs) {
@@ -117,6 +118,44 @@ asmlinkage long sys_batch(const struct pt_regs *regs) {
         i = (i == 63) ? 1 : i + 1;
     }
     start_index[j] = i;
+    return 0;
+}
+#endif
+asmlinkage long sys_batch(const struct pt_regs *regs) {
+    int j = start_index[1], cnt = 0, k;
+    int i = start_index[0];
+
+#if DEBUG
+    printk(KERN_INFO "Start flushing, started from index: %d\n", i);
+#endif
+    while (batch_table[j][i].rstatus == BENTRY_BUSY) {
+#if DEBUG
+        cnt++;
+        printk(KERN_INFO "Index %d do syscall %d (%d %d)\n", i,
+               batch_table[j][i].sysnum, j, i);
+#endif
+        batch_table[j][i].sysret =
+            indirect_call(scTab[batch_table[j][i].sysnum],
+                          batch_table[j][i].nargs, batch_table[j][i].args);
+        batch_table[j][i].rstatus = BENTRY_EMPTY;
+        if(i == MAX_ENTRY_NUM - 1){
+            if(j == MAX_THREAD_NUM -1){
+                j = 1;
+            }else
+            {
+                j++;
+            }
+            i = 1;
+        }else
+        {
+            i++;
+        }
+    }
+#if DEBUG
+        printk(KERN_INFO "batch %d syscalls\n", cnt);
+#endif
+    start_index[0] = i;
+    start_index[1] = j;
     return 0;
 }
 

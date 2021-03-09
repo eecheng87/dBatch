@@ -5,26 +5,60 @@ int main_thread_pid;
 int in_segment;
 void *mpool; /* memory pool */
 int pool_offset;
-int batch_num; /* number of busy entry */
+int batch_num;   /* number of busy entry */
+int syscall_num; /* number of syscall triggered currently */
+int predict_res; /* 1: do batch; 0: do normal */
+int predict_state;
+
+void get_next_state(int tran) {
+#if DEBUG
+    printf("In state %d, sysnum is %d\n", predict_state, tran);
+#endif
+    switch (predict_state) {
+    case PREDICT_S1:
+        predict_state = (tran > BATCH_THRESHOLD) ? PREDICT_S2 : PREDICT_S1;
+        predict_res = 0;
+        break;
+    case PREDICT_S2:
+        predict_state = (tran > BATCH_THRESHOLD) ? PREDICT_S3 : PREDICT_S1;
+        predict_res = 0;
+        break;
+    case PREDICT_S3:
+        predict_state = (tran > BATCH_THRESHOLD) ? PREDICT_S4 : PREDICT_S2;
+        predict_res = 1;
+        break;
+    default:
+        /* S4 */
+        predict_state = (tran > BATCH_THRESHOLD) ? PREDICT_S4 : PREDICT_S3;
+        predict_res = 1;
+        break;
+    }
+    syscall_num = 0;
+}
 
 long batch_start() {
     in_segment = 1;
+    batch_num = 0;
     return 0;
 }
 
 long batch_flush() {
     in_segment = 0;
 
-    /* avoid useless batch_flush */
-    if(batch_num == 0)
+/* avoid useless batch_flush */
+#if DYNAMIC_PRE_ENABLE
+    get_next_state(syscall_num);
+#endif
+    if (batch_num == 0)
         return 0;
     return syscall(__NR_batch_flush);
 }
 
+#if 0
 int open(const char *pathname, int flags, mode_t mode) {
 
-    if (!in_segment) {
-        real_open = real_open ? real_open : dlsym(RTLD_NEXT, "open");
+    syscall_num++;
+    if (!in_segment || !predict_res) {
         return real_open(pathname, flags, mode);
     }
     batch_num++;
@@ -48,8 +82,8 @@ int open(const char *pathname, int flags, mode_t mode) {
 
 int close(int fd) {
 
-    if (!in_segment) {
-        real_close = real_close ? real_close : dlsym(RTLD_NEXT, "close");
+    syscall_num++;
+    if (!in_segment || !predict_res) {
         return real_close(fd);
     }
     batch_num++;
@@ -70,8 +104,8 @@ int close(int fd) {
 
 ssize_t write(int fd, const void *buf, size_t count) {
 
-    if (!in_segment) {
-        real_write = real_write ? real_write : dlsym(RTLD_NEXT, "write");
+    syscall_num++;
+    if (!in_segment || !predict_res) {
         return real_write(fd, buf, count);
     }
     batch_num++;
@@ -95,8 +129,8 @@ ssize_t write(int fd, const void *buf, size_t count) {
 
 ssize_t read(int fd, void *buf, size_t count) {
 
-    if (!in_segment) {
-        real_read = real_read ? real_read : dlsym(RTLD_NEXT, "read");
+    syscall_num++;
+    if (!in_segment || !predict_res) {
         return real_read(fd, buf, count);
     }
     batch_num++;
@@ -120,7 +154,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 ssize_t sendto(int sockfd, void *buf, size_t len, unsigned flags,
                struct sockaddr *dest_addr, int addrlen) {
 
-    if (!in_segment) {
+    if (!in_segment || !predict_res) {
         real_sendto = real_sendto ? real_sendto : dlsym(RTLD_NEXT, "sendto");
         return real_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
     }
@@ -152,9 +186,54 @@ ssize_t sendto(int sockfd, void *buf, size_t len, unsigned flags,
     /* assume always success */
     return len;
 }
+#endif
+
+ssize_t sendto(int sockfd, void *buf, size_t len, unsigned flags,
+               struct sockaddr *dest_addr, int addrlen) {
+
+    syscall_num++;
+    if (!in_segment || !predict_res) {
+        return real_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
+    }
+    batch_num++;
+
+    int off, toff = 0;
+    off = curindex[1] << 6; /* 6 = log64 */
+
+    if (pool_offset + (len / POOL_UNIT) > MAX_POOL_SIZE)
+        pool_offset = 0;
+    else
+        pool_offset += (len / POOL_UNIT);
+
+    memcpy(mpool + pool_offset, buf, len);
+
+    btable[off + curindex[toff]].sysnum = __NR_sendto;
+    btable[off + curindex[toff]].rstatus = BENTRY_BUSY;
+    btable[off + curindex[toff]].nargs = 6;
+    btable[off + curindex[toff]].args[0] = sockfd;
+    btable[off + curindex[toff]].args[1] = (long)(mpool + pool_offset);
+    btable[off + curindex[toff]].args[2] = len;
+    btable[off + curindex[toff]].args[3] = flags;
+    btable[off + curindex[toff]].args[4] = (long)dest_addr;
+    btable[off + curindex[toff]].args[5] = addrlen;
+    btable[off + curindex[toff]].pid = main_thread_pid + off;
+
+    if (curindex[toff] == MAX_TABLE_SIZE - 1) {
+        if (curindex[1] == MAX_THREAD_NUM - 1) {
+            curindex[1] = 1;
+        } else {
+            curindex[1]++;
+        }
+        curindex[toff] = 1;
+    } else {
+        curindex[toff]++;
+    }
+    /* assume always success */
+    return len;
+}
 
 ssize_t send(int sockfd, void *buf, size_t len, unsigned flags,
-               struct sockaddr *dest_addr, int addrlen) {
+             struct sockaddr *dest_addr, int addrlen) {
     sendto(sockfd, buf, len, flags, NULL, 0);
 }
 
@@ -163,15 +242,28 @@ __attribute__((constructor)) static void setup(void) {
     size_t pgsize = getpagesize();
     in_segment = 0;
     batch_num = 0;
-
+    syscall_num = 0;
+    predict_state = PREDICT_S1;
+#if DYNAMIC_PRE_ENABLE
+    predict_res = 0;
+#else
+    predict_res = 1;
+#endif
     /* init memory pool */
-    mpool = (void*)malloc(sizeof(unsigned char) * MAX_POOL_SIZE);
+    mpool = (void *)malloc(sizeof(unsigned char) * MAX_POOL_SIZE);
     pool_offset = 0;
 
     /* get pid of main thread */
     main_thread_pid = syscall(186);
     btable =
         (struct batch_entry *)aligned_alloc(pgsize, pgsize * MAX_THREAD_NUM);
+
+    /* store glibc function */
+    real_open = real_open ? real_open : dlsym(RTLD_NEXT, "open");
+    real_close = real_close ? real_close : dlsym(RTLD_NEXT, "close");
+    real_write = real_write ? real_write : dlsym(RTLD_NEXT, "write");
+    real_read = real_read ? real_read : dlsym(RTLD_NEXT, "read");
+    real_sendto = real_sendto ? real_sendto : dlsym(RTLD_NEXT, "sendto");
 
     syscall(__NR_register, btable);
 

@@ -60,4 +60,11 @@ example/mongoose/http-server/test1.jpg
 example/mongoose/http-client/ca.pem
 example/mongoose/http-server/example
 example/mongoose/http-client/example
+example/mongoose/http-client/tmp.txt
 backup.txt
+*.png
+*.gp
+example/mongoose/http-client/mrg.py
+example/mongoose/http-server/parser.py
+
+

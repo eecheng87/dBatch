@@ -12,7 +12,7 @@
 #include "mongoose.h"
 #include <pthread.h>
 
-#define n 50
+#define n 1
 pthread_t t[n];
 pthread_mutex_t lock;
 
@@ -53,18 +53,22 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 void *worker(void *arg) {
+    int k;
+    for(k = 0; k < 1; k++){
     struct timespec t1, t2;
     struct mg_mgr mgr;                        // Event manager
     bool done = false;                        // Event handler flips it to true
     mg_mgr_init(&mgr);                        // Initialise event manager
     mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection
-    clock_gettime(CLOCK_REALTIME, &t1);
+    clock_gettime(CLOCK_MONOTONIC, &t1);
     while (!done) mg_mgr_poll(&mgr, 1000);    // Infinite event loop
-    clock_gettime(CLOCK_REALTIME, &t2);
+    clock_gettime(CLOCK_MONOTONIC, &t2);
     pthread_mutex_lock(&lock);
     printf("\n->> %ld\n", get_elapse(t1, t2));
     pthread_mutex_unlock(&lock);
     mg_mgr_free(&mgr);                        // Free resources
+    usleep(100000);
+    }
 }
 
 int main(int argc, char *argv[]) {
