@@ -34,3 +34,5 @@ close_t real_close;
 typedef long (*sendto_t)(int sockfd, void *buf, size_t len, unsigned flags,
                struct sockaddr *dest_addr, int addrlen);
 sendto_t real_sendto;
+typedef long (*sendfile_t)(int outfd, int infd, off_t* offset, size_t count);
+sendfile_t real_sendfile;

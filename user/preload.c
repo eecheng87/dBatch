@@ -9,18 +9,26 @@ int batch_num; /* number of busy entry */
 
 long batch_start() {
     in_segment = 1;
+    if(!btable){
+    int pgsize = getpagesize();
+    btable =
+        (struct batch_entry *)aligned_alloc(pgsize, pgsize * MAX_THREAD_NUM);
+
+    syscall(__NR_register, btable);
+    }
     return 0;
 }
 
 long batch_flush() {
     in_segment = 0;
-
+printf("> flush\n");
     /* avoid useless batch_flush */
     if(batch_num == 0)
         return 0;
+    //printf("flushing (user space)\n");
     return syscall(__NR_batch_flush);
 }
-
+#if 0
 int open(const char *pathname, int flags, mode_t mode) {
 
     if (!in_segment) {
@@ -157,6 +165,36 @@ ssize_t send(int sockfd, void *buf, size_t len, unsigned flags,
                struct sockaddr *dest_addr, int addrlen) {
     sendto(sockfd, buf, len, flags, NULL, 0);
 }
+#endif
+ssize_t sendfile64(int outfd, int infd, off_t* offset, size_t count){
+    //printf("-> sendfile(%d,%d,%ld,%ld)\n", outfd, infd, offset, count);
+    //real_sendfile = dlsym(RTLD_NEXT, "sendfile");
+    if (!in_segment) {
+        real_sendfile = real_sendfile ? real_sendfile : dlsym(RTLD_NEXT, "sendfile64");
+        return real_sendfile(outfd, infd ,offset, count);
+    }
+    //return real_sendfile(outfd, infd, offset, count);
+    batch_num++;
+
+    int off,
+        toff = (((struct pthread_fake *)pthread_self())->tid - main_thread_pid);
+    off = toff << 6; /* 6 = log64 */
+//printf("fill index %d\n", off + curindex[toff]);
+    off = 0;
+    btable[off + curindex[toff]].sysnum = 40;
+    btable[off + curindex[toff]].rstatus = BENTRY_BUSY;
+    btable[off + curindex[toff]].nargs = 4;
+    btable[off + curindex[toff]].args[0] = outfd;
+    btable[off + curindex[toff]].args[1] = infd;
+    btable[off + curindex[toff]].args[2] = offset;
+    btable[off + curindex[toff]].args[3] = count;
+    btable[off + curindex[toff]].pid = main_thread_pid + off;
+    curindex[toff] =
+        (curindex[toff] == MAX_TABLE_SIZE - 1) ? 1 : curindex[toff] + 1;
+
+    /* assume always success */
+    return count;
+}
 
 __attribute__((constructor)) static void setup(void) {
     int i;
@@ -170,11 +208,10 @@ __attribute__((constructor)) static void setup(void) {
 
     /* get pid of main thread */
     main_thread_pid = syscall(186);
-    btable =
-        (struct batch_entry *)aligned_alloc(pgsize, pgsize * MAX_THREAD_NUM);
+//    btable =
+//        (struct batch_entry *)aligned_alloc(pgsize, pgsize * MAX_THREAD_NUM);
 
-    syscall(__NR_register, btable);
-
+//    syscall(__NR_register, btable);
     for (i = 0; i < MAX_THREAD_NUM; i++)
         curindex[i] = 1;
 }

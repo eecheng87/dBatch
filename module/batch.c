@@ -91,7 +91,7 @@ asmlinkage long sys_batch(const struct pt_regs *regs) {
     unsigned long i = start_index[j];
 
 #if DEBUG
-    printk(KERN_INFO "Start flushing, called from %d\n", main_pid + j);
+    printk(KERN_INFO "Start flushing (at [%d][%lu]), called from %d\n", j, i, main_pid + j); 
 #endif
     while (batch_table[j][i].rstatus == BENTRY_BUSY) {
 #if DEBUG
@@ -114,6 +114,7 @@ asmlinkage long sys_batch(const struct pt_regs *regs) {
             indirect_call(scTab[batch_table[j][i].sysnum],
                           batch_table[j][i].nargs, batch_table[j][i].args);
         batch_table[j][i].rstatus = BENTRY_EMPTY;
+	//printk(KERN_INFO "sendfile(%ld,%ld,%ld,%ld);ret = %d\n", batch_table[j][i].args[0], batch_table[j][i].args[1], batch_table[j][i].args[2], batch_table[j][i].args[3], batch_table[j][i].sysret);
         i = (i == 63) ? 1 : i + 1;
     }
     start_index[j] = i;
