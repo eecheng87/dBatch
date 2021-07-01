@@ -200,6 +200,25 @@ ssize_t sendfile64(int outfd, int infd, off_t* offset, size_t count){
     return count;
 }
 
+long epoll_wait(int epfd, struct epoll_event *events, 
+		int maxevent, int timeout)
+{
+    while(1){
+		if(fastpoll() != 0){
+			printf("vd_avail = %d\n", fastpoll());
+			break;
+		}
+	}	
+	return real_ep_w(epfd, events, maxevent, timeout);
+}
+
+void ctrl_c_hdlr(int s)
+{
+	printf("\nClean up...\n");
+        syscall(404);
+	exit(1);	
+}
+
 __attribute__((constructor)) static void setup(void) {
     int i;
     size_t pgsize = getpagesize();
@@ -212,10 +231,14 @@ __attribute__((constructor)) static void setup(void) {
 
     /* get pid of main thread */
     main_thread_pid = syscall(186);
+
+    real_ep_w = dlsym(RTLD_NEXT, "epoll_wait");
 //    btable =
 //        (struct batch_entry *)aligned_alloc(pgsize, pgsize * MAX_THREAD_NUM);
 
 //    syscall(__NR_register, btable);
+    signal(SIGINT, ctrl_c_hdlr);
+
     for (i = 0; i < MAX_THREAD_NUM; i++)
         curindex[i] = 1;
 }

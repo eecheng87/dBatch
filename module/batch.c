@@ -98,7 +98,7 @@ asmlinkage long sys_batch(const struct pt_regs *regs) {
         printk(KERN_INFO "Index %ld do syscall %d\n", i,
                batch_table[j][i].sysnum);
 #endif
-        switch (batch_table[j][i].sysnum) {
+        /*switch (batch_table[j][i].sysnum) {
         case __NR_write:
         case __NR_read:
         case __NR_close: {
@@ -109,7 +109,7 @@ asmlinkage long sys_batch(const struct pt_regs *regs) {
         }
         default:
             break;
-        }
+        }*/
         batch_table[j][i].sysret =
             indirect_call(scTab[batch_table[j][i].sysnum],
                           batch_table[j][i].nargs, batch_table[j][i].args);
@@ -136,6 +136,35 @@ static void disallow_writes(void) {
 
 void *sys_oldcall0;
 void *sys_oldcall1;
+void *syscall_emp_ori;
+void *syscall_emp_ori2;
+
+static struct Vdso_data* vd;
+static struct vdso_data* vvar;
+asmlinkage long sys_fpreg(const struct pt_regs *regs) {
+	printk("regist fpoll\n");
+	
+	vvar = (struct vdso_data*)(vdsoDataAddr + ((char *)&system_wq - sysWQ));;
+	int epfd;
+       	struct fd f;
+	epfd = regs->di;
+	f = fdget(epfd);
+	if(!f.file)
+		return -1;
+    allow_writes();
+	vvar[0].__ep_addr = f.file->private_data;
+	vvar[0].__ep_avail = 0;
+    disallow_writes();
+        return 0;
+}
+asmlinkage long sys_fpexit(const struct pt_regs *regs) {
+    printk("exit fpoll\n");
+    allow_writes();
+    vvar[0].__ep_addr = 0;
+	vvar[0].__ep_avail = 0;
+    disallow_writes();
+    return 0;
+}
 
 static int __init mod_init(void) {
 
@@ -147,10 +176,14 @@ static int __init mod_init(void) {
     /* backup */
     sys_oldcall0 = scTab[__NR_batch_flush];
     sys_oldcall1 = scTab[__NR_register];
+    syscall_emp_ori = (void *)scTab[__NR_fpreg];
+    syscall_emp_ori2 = (void *)scTab[__NR_fpexit];
 
     /* hooking */
     scTab[__NR_batch_flush] = sys_batch;
     scTab[__NR_register] = sys_register;
+    scTab[__NR_fpreg] = (void *)sys_fpreg;
+    scTab[__NR_fpexit] = (void *)sys_fpexit;
 
     disallow_writes();
 
@@ -164,6 +197,8 @@ static void __exit mod_cleanup(void) {
     /* restore */
     scTab[__NR_batch_flush] = sys_oldcall0;
     scTab[__NR_register] = sys_oldcall1;
+    scTab[__NR_fpreg] = (void *)syscall_emp_ori;
+    scTab[__NR_fpexit] = (void *)syscall_emp_ori2;
 
     disallow_writes();
     printk(KERN_INFO "batch: removed\n");

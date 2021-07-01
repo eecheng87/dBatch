@@ -4,6 +4,9 @@
 #define MAX_THREAD_NUM 10
 #define MAX_POOL_SIZE 130172
 #define POOL_UNIT 8
+#define u32 unsigned int
+#define s32 signed int
+#define u64 unsigned long
 
 #include <dlfcn.h>
 #include <inttypes.h>
@@ -13,6 +16,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/auxv.h>
+#include <sys/epoll.h>
+#include <sys/mman.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <signal.h>
 
 struct pthread_fake {
     /* offset to find tid */
@@ -36,3 +46,5 @@ typedef long (*sendto_t)(int sockfd, void *buf, size_t len, unsigned flags,
 sendto_t real_sendto;
 typedef long (*sendfile_t)(int outfd, int infd, off_t* offset, size_t count);
 sendfile_t real_sendfile;
+typedef long (*epoll_wait_t)(int, struct epoll_event*, int, int);
+epoll_wait_t real_ep_w;

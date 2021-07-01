@@ -4,6 +4,8 @@
 #include <asm/unistd.h>                 /* __NR_* */
 #define __NR_batch_flush  183    /* Hijack Andrew FS call slot for now */
 #define __NR_register 184               /* Do register routine before using batch */
+#define __NR_fpreg 403
+#define __NR_fpexit 404
 
 /* config Debug mode */
 #define DEBUG 0
@@ -22,6 +24,27 @@ struct batch_entry {
     unsigned sysnum;
     unsigned sysret;
     long args[6];
+};
+
+struct Vdso_timestamp {
+    u64 sec;
+    u64 nsec;
+};
+
+struct Vdso_data {
+    u32                     seq;
+
+    s32                     clock_mode;
+    u64                     cycle_last;
+    u64                     mask;
+    u32                     mult;
+    u32                     shift;
+    struct Vdso_timestamp basetime[2];
+    s32                     tz_minuteswest;
+    s32                     tz_dsttime;
+    u32                     hrtimer_res;
+    u32                     __ep_avail;
+	void*			__ep_addr;
 };
 
 #ifndef __KERNEL__
