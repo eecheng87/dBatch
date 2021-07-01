@@ -114,7 +114,7 @@ asmlinkage long sys_batch(const struct pt_regs *regs) {
             indirect_call(scTab[batch_table[j][i].sysnum],
                           batch_table[j][i].nargs, batch_table[j][i].args);
         batch_table[j][i].rstatus = BENTRY_EMPTY;
-	//printk(KERN_INFO "sendfile(%ld,%ld,%ld,%ld);ret = %d\n", batch_table[j][i].args[0], batch_table[j][i].args[1], batch_table[j][i].args[2], batch_table[j][i].args[3], batch_table[j][i].sysret);
+//	printk(KERN_INFO "sendfile(%ld,%ld,%ld,%ld);ret = %d\n", batch_table[j][i].args[0], batch_table[j][i].args[1], batch_table[j][i].args[2], batch_table[j][i].args[3], batch_table[j][i].sysret);
         i = (i == 63) ? 1 : i + 1;
     }
     start_index[j] = i;

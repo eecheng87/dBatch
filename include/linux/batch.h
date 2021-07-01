@@ -6,7 +6,7 @@
 #define __NR_register 184               /* Do register routine before using batch */
 
 /* config Debug mode */
-#define DEBUG 1
+#define DEBUG 0
 
 /* batch table entry info */
 #define BENTRY_EMPTY 0

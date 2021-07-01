@@ -21,11 +21,11 @@ long batch_start() {
 
 long batch_flush() {
     in_segment = 0;
-printf("> flush\n");
     /* avoid useless batch_flush */
     if(batch_num == 0)
         return 0;
-    //printf("flushing (user space)\n");
+    //printf("flushing %d (from user space)\n", batch_num);
+    batch_num = 0;
     return syscall(__NR_batch_flush);
 }
 #if 0
@@ -53,6 +53,7 @@ int open(const char *pathname, int flags, mode_t mode) {
     /* memorize the -index of fd */
     return -(curindex[toff] - 1);
 }
+#endif
 
 int close(int fd) {
 
@@ -65,6 +66,7 @@ int close(int fd) {
     int off,
         toff = (((struct pthread_fake *)pthread_self())->tid - main_thread_pid);
     off = toff << 6; /* 6 = log64 */
+    off = 0;
     btable[off + curindex[toff]].sysnum = __NR_close;
     btable[off + curindex[toff]].rstatus = BENTRY_BUSY;
     btable[off + curindex[toff]].nargs = 1;
@@ -76,6 +78,7 @@ int close(int fd) {
     return 0;
 }
 
+#if 0
 ssize_t write(int fd, const void *buf, size_t count) {
 
     if (!in_segment) {
@@ -166,6 +169,7 @@ ssize_t send(int sockfd, void *buf, size_t len, unsigned flags,
     sendto(sockfd, buf, len, flags, NULL, 0);
 }
 #endif
+
 ssize_t sendfile64(int outfd, int infd, off_t* offset, size_t count){
     //printf("-> sendfile(%d,%d,%ld,%ld)\n", outfd, infd, offset, count);
     //real_sendfile = dlsym(RTLD_NEXT, "sendfile");
