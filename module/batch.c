@@ -1,5 +1,5 @@
 #include <generated/asm-offsets.h> /* __NR_syscall_max */
-#include <linux/batch.h>
+//#include <linux/batch.h>
 #include <linux/kallsyms.h> /* kallsyms_lookup_name, __NR_* */
 #include <linux/kernel.h>   /* Basic Linux module headers */
 #include <linux/mm.h>
@@ -9,6 +9,11 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h> /* copy_from_user put_user */
 #include <linux/version.h>
+#include "../include/linux/batch.h"
+#include <linux/file.h>
+#include <linux/fs.h>
+#include <asm/vdso/vsyscall.h>
+
 
 #include "scTab.h"
 
@@ -59,27 +64,28 @@ asmlinkage long sys_register(const struct pt_regs *regs) {
     printk(KERN_INFO "Start register, address at regs is %p\n", regs);
     int n_page, i, j;
     unsigned long p1 = regs->di;
+    long wkr = regs->si;
 
     /* map batch table from user-space to kernel */
     n_page = get_user_pages(
         (unsigned long)(p1), /* Start address to map */
-        MAX_THREAD_NUM, /* Number of pinned pages. 4096 btyes in this machine */
+        /*MAX_THREAD_NUM*/ 1, /* Number of pinned pages. 4096 btyes in this machine */
         FOLL_FORCE | FOLL_WRITE, /* Force flag */
-        pinned_pages,            /* struct page ** pointer to pinned pages */
+        &pinned_pages[wkr],            /* struct page ** pointer to pinned pages */
         NULL);
 
-    for (i = 0; i < MAX_THREAD_NUM; i++)
-        batch_table[i] = (struct batch_entry *)kmap(pinned_pages[i]);
+    //for (i = 0; i < MAX_THREAD_NUM; i++)
+        batch_table[wkr] = (struct batch_entry *)kmap(pinned_pages[wkr]);
 
     /* initial table status */
-    for (j = 0; j < MAX_THREAD_NUM; j++)
+    //for (j = 0; j < MAX_THREAD_NUM; j++)
         for (i = 0; i < MAX_ENTRY_NUM; i++)
-            batch_table[j][i].rstatus = BENTRY_EMPTY;
+            batch_table[wkr][i].rstatus = BENTRY_EMPTY;
 
-    for (i = 0; i < MAX_THREAD_NUM; i++)
-        start_index[i] = 1;
+    //for (i = 0; i < MAX_THREAD_NUM; i++)
+        start_index[wkr] = 1;
 
-    main_pid = current->pid;
+    //main_pid = current->pid;
 
     return 0;
 }
@@ -87,11 +93,10 @@ asmlinkage long sys_register(const struct pt_regs *regs) {
 /* printk is only for debug usage */
 /* it will lower a lot performance */
 asmlinkage long sys_batch(const struct pt_regs *regs) {
-    int j = current->pid - main_pid;
+    int j = regs->di;
     unsigned long i = start_index[j];
-
 #if DEBUG
-    printk(KERN_INFO "Start flushing (at [%d][%lu]), called from %d\n", j, i, main_pid + j); 
+    printk(KERN_INFO "Start flushing (at [%d][%lu]), called from %d\n", j, i, j); 
 #endif
     while (batch_table[j][i].rstatus == BENTRY_BUSY) {
 #if DEBUG
@@ -144,7 +149,7 @@ static struct vdso_data* vvar;
 asmlinkage long sys_fpreg(const struct pt_regs *regs) {
 	printk("regist fpoll\n");
 	
-	vvar = (struct vdso_data*)(vdsoDataAddr + ((char *)&system_wq - sysWQ));;
+	vvar = (struct vdso_data*)(vdsoDataAddr + ((char *)&system_wq - smSysWQ));
 	int epfd;
        	struct fd f;
 	epfd = regs->di;

@@ -8,7 +8,7 @@
 #define __NR_fpexit 404
 
 /* config Debug mode */
-#define DEBUG 0
+#define DEBUG 1
 
 /* batch table entry info */
 #define BENTRY_EMPTY 0
@@ -16,6 +16,10 @@
 
 #define MAX_THREAD_NUM 10
 #define MAX_ENTRY_NUM 64
+
+#define u32 unsigned int
+#define s32 signed int
+#define u64 unsigned long
 
 struct batch_entry {
     unsigned pid; /* or thread id */
