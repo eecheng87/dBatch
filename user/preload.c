@@ -59,7 +59,8 @@ int close(int fd) {
     //curindex[toff] =
       //  (curindex[toff] == MAX_TABLE_SIZE - 1) ? 1 : curindex[toff] + 1;
     curindex = (curindex == MAX_TABLE_SIZE - 1) ? 1 : curindex + 1;
-
+    if(batch_num > 60)
+	    batch_flush();
     return 0;
 }
 

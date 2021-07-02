@@ -8,7 +8,7 @@
 #define __NR_fpexit 404
 
 /* config Debug mode */
-#define DEBUG 1
+#define DEBUG 0
 
 /* batch table entry info */
 #define BENTRY_EMPTY 0
