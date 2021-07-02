@@ -19,6 +19,7 @@ long batch_start() {
         (struct batch_entry *)aligned_alloc(pgsize, pgsize);
     toff = (((struct pthread_fake *)pthread_self())->tid - main_thread_pid);
     toff -= 1;
+    printf("Register table %d\n", toff);
     off = toff << 6;
     syscall(__NR_register, btable, toff);
     }
@@ -49,7 +50,7 @@ int close(int fd) {
     off = toff << 6;*/
     //off = 0;
     //toff = 0;
-    printf(">> this is worker %d\n", toff);
+    //printf(">> this is worker %d\n", toff);
     btable[/*off + curindex[toff]*/curindex].sysnum = __NR_close;
     btable[/*off + curindex[toff]*/curindex].rstatus = BENTRY_BUSY;
     btable[/*off + curindex[toff]*/curindex].nargs = 1;
@@ -80,7 +81,7 @@ ssize_t sendfile64(int outfd, int infd, off_t* offset, size_t count){
 //printf("fill index %d\n", off + curindex[toff]);
     //off = 0;
     //toff = 0;
-    printf(">> this is worker %d\n", toff);
+    //printf(">> this is worker %d\n", toff);
     btable[/*off + curindex[toff]*/curindex].sysnum = 40;
     btable[/*off + curindex[toff]*/curindex].rstatus = BENTRY_BUSY;
     btable[/*off + curindex[toff]*/curindex].nargs = 4;
