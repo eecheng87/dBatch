@@ -103,10 +103,13 @@ ssize_t write(int fd, const void *buf, size_t count) {
 }
 #endif
 
+
 #include <fcntl.h>
 #include <stdarg.h>
 #define EXTRA_OPEN_FLAGS 0
 #define AT_FDCWD -100
+
+#if 0
 int open64(const char *file, int oflag, ...)
 {
     int mode = 0;
@@ -134,7 +137,9 @@ int open64(const char *file, int oflag, ...)
     curindex = (curindex == MAX_TABLE_SIZE - 1) ? 1 : curindex + 1;
     return 0;
 }
+#endif
 
+#if 0
 int __xstat64(int ver, const char *pname, struct stat* buf){
     if (!in_segment) {
         return syscall(4, pname, buf);
@@ -151,11 +156,27 @@ int __xstat64(int ver, const char *pname, struct stat* buf){
     return 0;
 
 }
+#endif 
+
 #if 1
 int __fxstat64(int ver, int fd,  struct stat64 *buf) {
     if (!in_segment) {
-        return syscall(5, fd, buf);
+	//printf("----------\n");
+   	//printf("%ld %d %ld %ld %ld %ld %ld\n", buf->st_ino, buf->st_mode, buf->st_nlink, buf->st_rdev, buf->st_size, buf->st_blksize, buf->st_blocks);
+        syscall(5, fd, buf);
+	//printf("%ld %d %ld %ld %ld %ld %ld\n", buf->st_ino, buf->st_mode, buf->st_nlink, buf->st_rdev, buf->st_size, buf->st_blksize, buf->st_blocks);
+
+	return 0;
     }
+    buf->st_ino = 7996678;
+    buf->st_mode = 33204;
+    buf->st_nlink = 1;
+    buf->st_rdev = 0;
+    buf->st_size = 920;
+    buf->st_blksize = 4096;
+    buf->st_blocks = 8;
+    return 0;
+#if 0
     batch_num++;
 
     btable[curindex].sysnum = 5;
@@ -166,6 +187,7 @@ int __fxstat64(int ver, int fd,  struct stat64 *buf) {
 
     curindex = (curindex == MAX_TABLE_SIZE - 1) ? 1 : curindex + 1;
     return 0;
+#endif
 }
 #endif
 
