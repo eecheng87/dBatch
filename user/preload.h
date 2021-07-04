@@ -12,13 +12,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <sys/auxv.h>
-#include <sys/mman.h>
-#include <errno.h>
-#include <unistd.h>
-#include <sys/syscall.h>
-#include <signal.h>
+//#include <sys/stat.h>
+//#include <sys/auxv.h>
+//#include <sys/mman.h>
+//#include <errno.h>
+//#include <unistd.h>
+//#include <sys/syscall.h>
+//#include <signal.h>
 
 struct pthread_fake {
     /* offset to find tid */

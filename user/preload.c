@@ -58,7 +58,7 @@ int close(int fd) {
 
 ssize_t sendfile64(int outfd, int infd, off_t* offset, size_t count){
 	//real_sendfile = dlsym(RTLD_NEXT, "sendfile");
-    if (!in_segment) {
+   if (!in_segment) {
         real_sendfile = real_sendfile ? real_sendfile : dlsym(RTLD_NEXT, "sendfile");
         return real_sendfile(outfd, infd ,offset, count);
     }
@@ -102,12 +102,81 @@ ssize_t write(int fd, const void *buf, size_t count) {
     return 0;
 }
 #endif
+
+#include <fcntl.h>
+#include <stdarg.h>
+#define EXTRA_OPEN_FLAGS 0
+#define AT_FDCWD -100
+int open64(const char *file, int oflag, ...)
+{
+    int mode = 0;
+    if (__OPEN_NEEDS_MODE (oflag))
+    {
+        va_list arg;
+        va_start (arg, oflag);
+        mode = va_arg (arg, int);
+        va_end (arg);
+    }
+    if (!in_segment) {
+        return syscall (257, AT_FDCWD, file, oflag | EXTRA_OPEN_FLAGS,
+                         mode);
+    }
+    batch_num++;
+
+    btable[curindex].sysnum = 257;
+    btable[curindex].rstatus = BENTRY_BUSY;
+    btable[curindex].nargs = 4;
+    btable[curindex].args[0] = AT_FDCWD;
+    btable[curindex].args[1] = (long)file;
+    btable[curindex].args[2] = oflag | EXTRA_OPEN_FLAGS;
+    btable[curindex].args[3] = mode;
+
+    curindex = (curindex == MAX_TABLE_SIZE - 1) ? 1 : curindex + 1;
+    return 0;
+}
+
+int __xstat64(int ver, const char *pname, struct stat* buf){
+    if (!in_segment) {
+        return syscall(4, pname, buf);
+    }
+    batch_num++;
+
+    btable[curindex].sysnum = 4;
+    btable[curindex].rstatus = BENTRY_BUSY;
+    btable[curindex].nargs = 2;
+    btable[curindex].args[0] = pname;
+    btable[curindex].args[1] = (long)buf;
+
+    curindex = (curindex == MAX_TABLE_SIZE - 1) ? 1 : curindex + 1;
+    return 0;
+
+}
+#if 1
+int __fxstat64(int ver, int fd,  struct stat64 *buf) {
+    if (!in_segment) {
+        return syscall(5, fd, buf);
+    }
+    batch_num++;
+
+    btable[curindex].sysnum = 5;
+    btable[curindex].rstatus = BENTRY_BUSY;
+    btable[curindex].nargs = 2;
+    btable[curindex].args[0] = fd;
+    btable[curindex].args[1] = (long)buf;
+
+    curindex = (curindex == MAX_TABLE_SIZE - 1) ? 1 : curindex + 1;
+    return 0;
+}
+#endif
+
 #if 1
 #define MAX_POOL_IOV_SIZE 100
+
+/*
 struct iovec{
 	void* iov_base;
 	size_t iov_len;
-};
+};*/
 struct iovec *iovpool;
 int iov_offset;
 
@@ -122,7 +191,6 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt) {
 
     for(i = 0; i < iovcnt; i++){
         int ll = iov[i].iov_len;
-
         /* handle string */
         if (pool_offset + (ll / POOL_UNIT) > MAX_POOL_SIZE)
             pool_offset = 0;
@@ -138,7 +206,6 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt) {
 
         iovpool[iov_offset].iov_base = mpool + pool_offset;
         iovpool[iov_offset].iov_len = ll;
-
         len += iov[i].iov_len;
     }
 
@@ -201,7 +268,7 @@ __attribute__((constructor)) static void setup(void) {
       //  (struct batch_entry *)aligned_alloc(pgsize, pgsize * MAX_THREAD_NUM);
 
     //syscall(__NR_register, btable);
-    signal(SIGINT, ctrl_c_hdlr);
+    //signal(SIGINT, ctrl_c_hdlr);
 
     //for (i = 0; i < MAX_THREAD_NUM; i++)
       //  curindex[i] = 1;
