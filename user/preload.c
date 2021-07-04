@@ -10,8 +10,9 @@ int batch_num; /* number of busy entry */
 
 
 int off, toff;
-
-long batch_start() {
+struct batch_entry *btable;
+long batch_start(int events) {
+    //if(events < 10)return 0;
     in_segment = 1;
     if(!btable){
     int pgsize = getpagesize();
@@ -44,45 +45,26 @@ int close(int fd) {
     }
     batch_num++;
 
-    /*int off,
-        toff = (((struct pthread_fake *)pthread_self())->tid - main_thread_pid);
-    toff -= 1;
-    off = toff << 6;*/
-    //off = 0;
-    //toff = 0;
-    //printf(">> this is worker %d\n", toff);
     btable[/*off + curindex[toff]*/curindex].sysnum = __NR_close;
     btable[/*off + curindex[toff]*/curindex].rstatus = BENTRY_BUSY;
     btable[/*off + curindex[toff]*/curindex].nargs = 1;
     btable[/*off + curindex[toff]*/curindex].args[0] = fd;
-    btable[/*off + curindex[toff]*/curindex].pid = main_thread_pid + off;
-    //curindex[toff] =
-      //  (curindex[toff] == MAX_TABLE_SIZE - 1) ? 1 : curindex[toff] + 1;
     curindex = (curindex == MAX_TABLE_SIZE - 1) ? 1 : curindex + 1;
-    if(batch_num > 60)
+    if(batch_num > 50)
 	    batch_flush();
     return 0;
 }
 
 
 ssize_t sendfile64(int outfd, int infd, off_t* offset, size_t count){
-    //printf("-> sendfile(%d,%d,%ld,%ld)\n", outfd, infd, offset, count);
-    //real_sendfile = dlsym(RTLD_NEXT, "sendfile");
-    /*if (!in_segment) {
-        real_sendfile = real_sendfile ? real_sendfile : dlsym(RTLD_NEXT, "sendfile64");
+	//real_sendfile = dlsym(RTLD_NEXT, "sendfile");
+    if (!in_segment) {
+        real_sendfile = real_sendfile ? real_sendfile : dlsym(RTLD_NEXT, "sendfile");
         return real_sendfile(outfd, infd ,offset, count);
-    }*/
+    }
     //return real_sendfile(outfd, infd, offset, count);
     batch_num++;
 
-    /*int off,
-        toff = (((struct pthread_fake *)pthread_self())->tid - main_thread_pid);
-    toff -= 1;
-    off = toff << 6;*/
-//printf("fill index %d\n", off + curindex[toff]);
-    //off = 0;
-    //toff = 0;
-    //printf(">> this is worker %d\n", toff);
     btable[/*off + curindex[toff]*/curindex].sysnum = 40;
     btable[/*off + curindex[toff]*/curindex].rstatus = BENTRY_BUSY;
     btable[/*off + curindex[toff]*/curindex].nargs = 4;
@@ -90,27 +72,103 @@ ssize_t sendfile64(int outfd, int infd, off_t* offset, size_t count){
     btable[/*off + curindex[toff]*/curindex].args[1] = infd;
     btable[/*off + curindex[toff]*/curindex].args[2] = offset;
     btable[/*off + curindex[toff]*/curindex].args[3] = count;
-    btable[/*off + curindex[toff]*/curindex].pid = main_thread_pid + off;
     //curindex[toff] =
       //  (curindex[toff] == MAX_TABLE_SIZE - 1) ? 1 : curindex[toff] + 1;
     curindex = (curindex == MAX_TABLE_SIZE - 1) ? 1 : curindex + 1;
     /* assume always success */
+    if(batch_num > 50)
+            batch_flush();
     return count;
 }
+#if 1
+ssize_t write(int fd, const void *buf, size_t count) {
+
+    if (!in_segment) {
+        real_write = real_write ? real_write : dlsym(RTLD_NEXT, "write");
+        return real_write(fd, buf, count);
+    }
+    batch_num++;
+
+    btable[curindex].sysnum = __NR_write;
+    btable[curindex].rstatus = BENTRY_BUSY;
+    btable[curindex].nargs = 3;
+    btable[curindex].args[0] = fd;
+    btable[curindex].args[1] = (long)buf;
+    btable[curindex].args[2] = count;
+
+    curindex = (curindex == MAX_TABLE_SIZE - 1) ? 1 : curindex + 1;
+    if(batch_num > 50)
+            batch_flush();
+    return 0;
+}
+#endif
+#if 1
+#define MAX_POOL_IOV_SIZE 100
+struct iovec{
+	void* iov_base;
+	size_t iov_len;
+};
+struct iovec *iovpool;
+int iov_offset;
+
+
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt) {
+    if (!in_segment) {
+        return syscall(20, fd, iov, iovcnt);
+    }
+    batch_num++;
+
+    int len = 0, i;
+
+    for(i = 0; i < iovcnt; i++){
+        int ll = iov[i].iov_len;
+
+        /* handle string */
+        if (pool_offset + (ll / POOL_UNIT) > MAX_POOL_SIZE)
+            pool_offset = 0;
+        else
+            pool_offset += (ll / POOL_UNIT);
+
+        /* handle iovec */
+        if (iov_offset + 1 >= MAX_POOL_IOV_SIZE)
+            iov_offset = 0;
+        else
+            iov_offset++;
+        memcpy(mpool + pool_offset, iov[i].iov_base, ll);
+
+        iovpool[iov_offset].iov_base = mpool + pool_offset;
+        iovpool[iov_offset].iov_len = ll;
+
+        len += iov[i].iov_len;
+    }
+
+    btable[curindex].sysnum = 20;
+    btable[curindex].rstatus = BENTRY_BUSY;
+    btable[curindex].nargs = 3;
+    btable[curindex].args[0] = fd;
+    btable[curindex].args[1] = (long)(iovpool + iov_offset - iovcnt + 1);
+    btable[curindex].args[2] = iovcnt;
+
+    curindex = (curindex == MAX_TABLE_SIZE - 1) ? 1 : curindex + 1;
+    /* assume always success */
+    return len;
+}
+#endif
+
 #if 0
 #include <sched.h>
 int epoll_wait(int epfd, struct epoll_event *events, 
 		int maxevent, int timeout)
 {
    //real_ep_w = real_ep_w ? real_ep_w : dlsym(RTLD_NEXT, "epoll_wait");
-    while(1){
+    /*while(1){
 	//printf("vd_avail = %d\n", fastpoll());
 	if(fastpoll() != 0){
 	//	printf("vd_avail = %d\n", fastpoll());
 		break;
 	}
 	sched_yield();
-    }
+    }*/
 
     return syscall(232, epfd, events, maxevent, timeout);
 }
@@ -132,6 +190,9 @@ __attribute__((constructor)) static void setup(void) {
     /* init memory pool */
     mpool = (void*)malloc(sizeof(unsigned char) * MAX_POOL_SIZE);
     pool_offset = 0;
+
+    iovpool = (struct iovec*)malloc(sizeof(struct iovec) * MAX_POOL_IOV_SIZE);
+    iov_offset = 0;
 
     /* get pid of main thread */
     main_thread_pid = syscall(186);

@@ -1,3 +1,3 @@
 /* Dummy shared lib */
-long batch_start();
+long batch_start(int);
 long batch_flush();

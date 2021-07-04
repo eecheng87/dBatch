@@ -26,7 +26,7 @@ struct pthread_fake {
     pid_t tid;
 };
 
-struct batch_entry *btable;
+extern struct batch_entry *btable;
 //extern int curindex[MAX_THREAD_NUM];
 extern int curindex;
 
