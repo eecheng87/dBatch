@@ -92,26 +92,25 @@ asmlinkage long sys_register(const struct pt_regs *regs) {
 
 /* printk is only for debug usage */
 /* it will lower a lot performance */
+int infd = -1;
 asmlinkage long sys_batch(const struct pt_regs *regs) {
     int j = regs->di;
     unsigned long i = start_index[j];
+    //int infd = -1;
 #if DEBUG
     printk(KERN_INFO "Start flushing (at [%d][%lu]), called from %d\n", j, i, j); 
 #endif
     while (batch_table[j][i].rstatus == BENTRY_BUSY) {
 #if DEBUG
-        printk(KERN_INFO "Index %ld do syscall %d\n", i,
-               batch_table[j][i].sysnum);
+        //printk(KERN_INFO "Index %ld do syscall %d\n", i,
+          //     batch_table[j][i].sysnum);
 #endif
         /*switch (batch_table[j][i].sysnum) {
-        case __NR_write:
-        case __NR_read:
-        case __NR_close: {
-            int fd = batch_table[j][i].args[0];
-            batch_table[j][i].args[0] =
-                fd < 0 ? batch_table[j][-fd].sysret : fd;
-            break;
-        }
+	case __NR_sendfile:{
+	    if(infd > 0)
+	        batch_table[j][i].args[1] = infd;
+	    break;	    
+	}
         default:
             break;
         }*/
@@ -119,8 +118,19 @@ asmlinkage long sys_batch(const struct pt_regs *regs) {
             indirect_call(scTab[batch_table[j][i].sysnum],
                           batch_table[j][i].nargs, batch_table[j][i].args);
         batch_table[j][i].rstatus = BENTRY_EMPTY;
-//	printk(KERN_INFO "sendfile(%ld,%ld,%ld,%ld);ret = %d\n", batch_table[j][i].args[0], batch_table[j][i].args[1], batch_table[j][i].args[2], batch_table[j][i].args[3], batch_table[j][i].sysret);
-        i = (i == 63) ? 1 : i + 1;
+	/*if (batch_table[j][i].sysnum == 257){
+	char bb[200];
+	bb[199] = 0;
+	strncpy_from_user(bb, batch_table[j][i].args[1], 199);
+	printk("file name is %s\n", bb);
+            infd = batch_table[j][i].sysret;
+          
+        }*/
+
+#if DEBUG
+	printk(KERN_INFO "syscall(%d, %ld,%ld,%ld,%ld);ret = %d\n", batch_table[j][i].sysnum, batch_table[j][i].args[0], batch_table[j][i].args[1], batch_table[j][i].args[2], batch_table[j][i].args[3], batch_table[j][i].sysret);
+#endif
+	i = (i == 63) ? 1 : i + 1;
     }
     start_index[j] = i;
     return 0;

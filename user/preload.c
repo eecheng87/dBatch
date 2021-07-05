@@ -106,13 +106,13 @@ ssize_t write(int fd, const void *buf, size_t count) {
 
 #include <fcntl.h>
 #include <stdarg.h>
-#define EXTRA_OPEN_FLAGS 0
+#define EXTRA_OPEN_FLAGS 0100000
 #define AT_FDCWD -100
 
-#if 0
+#if 0 
 int open64(const char *file, int oflag, ...)
 {
-    int mode = 0;
+    int mode = 0, len = strlen(file) + 1, i = 0;
     if (__OPEN_NEEDS_MODE (oflag))
     {
         va_list arg;
@@ -121,21 +121,38 @@ int open64(const char *file, int oflag, ...)
         va_end (arg);
     }
     if (!in_segment) {
-        return syscall (257, AT_FDCWD, file, oflag | EXTRA_OPEN_FLAGS,
+   // printf("----\n");
+   // printf("%d %s %d %d\n", AT_FDCWD, file, oflag | EXTRA_OPEN_FLAGS, mode);
+        int r = syscall (257, AT_FDCWD, file, oflag | EXTRA_OPEN_FLAGS,
                          mode);
+  //  printf("%d %s %d %d\n", AT_FDCWD, file, oflag | EXTRA_OPEN_FLAGS, mode);
+        return r;
     }
-    batch_num++;
+//    while(file[i] != '\0' && file[i] != ' ' && file[i] != '\n')
+//	    i++;
+//    len = i;
 
+    if(pool_offset + (len / POOL_UNIT) >= MAX_POOL_SIZE)
+        pool_offset = 0;
+    else
+        pool_offset += (len / POOL_UNIT);
+    memcpy(mpool + pool_offset, file, len);
+    //printf("%s %s\n", file, mpool + pool_offset);
+
+    batch_num++;
+char bu[50] = "/home/steven/Desktop/nginx-1.20.0/html/index.html";
     btable[curindex].sysnum = 257;
     btable[curindex].rstatus = BENTRY_BUSY;
     btable[curindex].nargs = 4;
     btable[curindex].args[0] = AT_FDCWD;
-    btable[curindex].args[1] = (long)file;
+    btable[curindex].args[1] = /*(long)(mpool + pool_offset)*/(long)bu;
     btable[curindex].args[2] = oflag | EXTRA_OPEN_FLAGS;
     btable[curindex].args[3] = mode;
 
     curindex = (curindex == MAX_TABLE_SIZE - 1) ? 1 : curindex + 1;
-    return 0;
+ //   batch_flush();
+ //   batch_start(1);
+    return 7777;
 }
 #endif
 
